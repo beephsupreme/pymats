@@ -4,37 +4,8 @@ import pandas as pd
 import re
 import requests
 
-PN = "Part Number"
-OH = "On Hand"
-OO = "On Order"
-RO = "Reorder"
-BL = "Backlog"
-RLS = "Released"
-HFR = "HFR"
-TA = "T-Avail"
-RA = "R-Avail"
-MP = "Multiplier"
-VP = "Vendor Part Num"
 
-
-def validate(schedule):
-    df = pd.read_csv("./data/validate.csv")
-    valdict = dict(zip(df[VP], df[PN]))
-    validated = True
-    for index, row in schedule.iterrows():
-        if index in valdict:
-            continue
-        else:
-            print(f"{index} not found in validation table.")
-            validated = False
-    if not validated:
-        exit(1)
-
-def translate():
-    print('translation skipped')
-
-
-def get_schedule():
+def webscrape():
     html = requests.get('https://www.toki.co.jp/purchasing/TLIHTML.files/sheet001.htm')
     soup = BeautifulSoup(html.content, 'html.parser')
     table = soup.find_all('table')
@@ -64,6 +35,38 @@ def get_schedule():
             continue
         df[name] = pd.to_numeric(df[name])
     df = df.groupby('TOKISTAR CODE').sum()
-    validate(df)
-    translate()
     return df
+
+
+def validate(schedule):
+    df = pd.read_csv("./data/validate.csv")
+    valdict = dict(zip(df['Vendor Part Num'], df['Part Number']))
+    validated = True
+    for index, row in schedule.iterrows():
+        if index in valdict:
+            continue
+        else:
+            print(f"{index} not found in validation table.")
+            validated = False
+    if not validated:
+        exit(1)
+
+
+def translate(schedule):
+    df = pd.read_csv("./data/translate.csv")
+    transdict = dict(zip(df['Part Number'], df['Factor']))
+    for index, row in schedule.iterrows():
+        if index in transdict:
+            factor = transdict[index]
+            row = row * factor
+            temp = []
+            for r in row:
+                temp.append(r)
+            schedule.loc[index] = temp
+
+
+def get_schedule():
+    schedule = webscrape()
+    validate(schedule)
+    translate(schedule)
+    return schedule
